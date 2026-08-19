@@ -6,7 +6,6 @@ from PIL import Image
 
 st.set_page_config(page_title="Diagnostic des feuilles", page_icon="🌿", layout="centered")
 
-# ---------- Style ----------
 st.markdown("""
 <style>
 .block-container {padding-top: 1.5rem; max-width: 640px;}
@@ -36,17 +35,19 @@ SEUIL = 0.60
 def joli(nom):
     return nom.replace("___", " — ").replace("_", " ")
 
+def espece(nom):
+    return joli(nom.split("___")[0])
+
 def card(css, titre, texte):
     st.markdown(f'<div class="big-card {css}"><h2>{titre}</h2><p>{texte}</p></div>', unsafe_allow_html=True)
 
-# ---------- En-tête ----------
-st.title("🌿 Diagnostic des maladies foliaires")
+st.title("Diagnostic des maladies foliaires")
 st.caption("Aide au dépistage de première ligne — ce n'est pas un diagnostic définitif.")
-st.markdown('<div class="tips">📸 <b>Pour un meilleur résultat :</b> cadrez <b>une seule feuille bien en évidence</b>, '
-            'nette, bien éclairée, sur un fond simple. Évitez les photos floues ou de loin.</div>', unsafe_allow_html=True)
+st.markdown('<div class="tips"><b>Pour un meilleur résultat :</b> cadrez <b>une seule feuille bien en évidence</b>, '
+            'nette, bien éclairée, sur un fond simple. Évitez les photos floues ou prises de loin.</div>',
+            unsafe_allow_html=True)
 
-# ---------- Entrée : photo ou upload ----------
-tab_cam, tab_up = st.tabs(["📷 Prendre une photo", "📤 Uploader une photo"])
+tab_cam, tab_up = st.tabs(["Prendre une photo", "Uploader une photo"])
 with tab_cam:
     img_cam = st.camera_input("Prenez la feuille en photo")
 with tab_up:
@@ -54,7 +55,6 @@ with tab_up:
 
 fichier = img_cam or img_up
 
-# ---------- Prédiction ----------
 if fichier:
     image = Image.open(fichier).convert("RGB")
     st.image(image, caption="Image analysée", width=280)
@@ -69,18 +69,21 @@ if fichier:
     st.write("")
     if conf >= SEUIL:
         if "healthy" in label:
-            card("green", "✅ Plante saine", f"Aucun signe de maladie détecté — confiance {conf:.0%}.")
+            card("green", f"Plante saine — {espece(label)}",
+                 f"Aucun signe de maladie détecté sur cette feuille de {espece(label)} (confiance {conf:.0%}).")
         else:
-            card("orange", f"🩺 {joli(label)}",
+            card("orange", joli(label),
                  f"Maladie détectée (confiance {conf:.0%}). Isolez la plante, retirez les feuilles atteintes "
                  f"et rapprochez-vous d'un conseiller phytosanitaire.")
-        st.markdown("**Ça ressemble aussi un peu à :**")
-        st.markdown("".join(f'<span class="chip">{joli(n)} · {p:.0%}</span>' for n, p in autres), unsafe_allow_html=True)
+        st.markdown("**Cela ressemble aussi un peu à :**")
+        st.markdown("".join(f'<span class="chip">{joli(n)} · {p:.0%}</span>' for n, p in autres),
+                    unsafe_allow_html=True)
     else:
-        card("gray", "🤔 Diagnostic incertain",
+        card("gray", "Diagnostic incertain",
              f"Je ne suis pas assez sûr pour trancher (meilleure hypothèse {conf:.0%}). "
              f"Reprenez une photo plus nette, feuille bien cadrée et éclairée.")
         st.markdown("**Cela pourrait ressembler à :**")
         cands = [(label, conf)] + autres
-        st.markdown("".join(f'<span class="chip">{joli(n)} · {p:.0%}</span>' for n, p in cands), unsafe_allow_html=True)
-        st.info("💡 Astuce : approchez-vous de la feuille, sur fond clair, sans flou → le diagnostic sera bien plus fiable.")
+        st.markdown("".join(f'<span class="chip">{joli(n)} · {p:.0%}</span>' for n, p in cands),
+                    unsafe_allow_html=True)
+        st.info("Astuce : approchez-vous de la feuille, sur fond clair, sans flou — le diagnostic sera plus fiable.")
