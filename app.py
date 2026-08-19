@@ -4,23 +4,7 @@ import numpy as np
 import json
 from PIL import Image
 
-st.set_page_config(page_title="Diagnostic des feuilles", page_icon="🌿", layout="centered")
-
-st.markdown("""
-<style>
-.block-container {padding-top: 1.5rem; max-width: 640px;}
-.big-card {border-radius: 16px; padding: 18px 20px; margin: 10px 0; color: #fff;}
-.green {background: linear-gradient(135deg,#16a34a,#22c55e);}
-.orange{background: linear-gradient(135deg,#d97706,#f59e0b);}
-.gray  {background: linear-gradient(135deg,#475569,#64748b);}
-.big-card h2 {margin:0; font-size:1.4rem;}
-.big-card p {margin:.4rem 0 0; font-size:1rem; opacity:.95;}
-.chip {display:inline-block; background:#f1f5f9; color:#0f172a; border-radius:10px;
-       padding:6px 12px; margin:4px 6px 0 0; font-size:.9rem;}
-.tips {background:#ecfdf5; border-left:4px solid #16a34a; padding:12px 14px;
-       border-radius:8px; font-size:.9rem;}
-</style>
-""", unsafe_allow_html=True)
+st.set_page_config(page_title="Diagnostic maladies foliaires", page_icon="🌿")
 
 @st.cache_resource
 def load():
@@ -32,58 +16,24 @@ model, class_names = load()
 IMG_SIZE = (224, 224)
 SEUIL = 0.60
 
-def joli(nom):
-    return nom.replace("___", " — ").replace("_", " ")
+st.title("🌿 Diagnostic des maladies foliaires — PlantVillage")
+st.write("Uploadez une photo de feuille → diagnostic + confiance + conseil. Outil d'aide au dépistage, non un diagnostic définitif.")
 
-def espece(nom):
-    return joli(nom.split("___")[0])
-
-def card(css, titre, texte):
-    st.markdown(f'<div class="big-card {css}"><h2>{titre}</h2><p>{texte}</p></div>', unsafe_allow_html=True)
-
-st.title("Diagnostic des maladies foliaires")
-st.caption("Aide au dépistage de première ligne — ce n'est pas un diagnostic définitif.")
-st.markdown('<div class="tips"><b>Pour un meilleur résultat :</b> cadrez <b>une seule feuille bien en évidence</b>, '
-            'nette, bien éclairée, sur un fond simple. Évitez les photos floues ou prises de loin.</div>',
-            unsafe_allow_html=True)
-
-tab_cam, tab_up = st.tabs(["Prendre une photo", "Uploader une photo"])
-with tab_cam:
-    img_cam = st.camera_input("Prenez la feuille en photo")
-with tab_up:
-    img_up = st.file_uploader("Choisir une image", type=["jpg", "jpeg", "png", "webp"])
-
-fichier = img_cam or img_up
-
-if fichier:
-    image = Image.open(fichier).convert("RGB")
-    st.image(image, caption="Image analysée", width=280)
-
+file = st.file_uploader("Photo de la feuille", type=["jpg", "jpeg", "png", "webp"])
+if file:
+    image = Image.open(file).convert("RGB")
+    st.image(image, width=300)
     arr = np.expand_dims(np.array(image.resize(IMG_SIZE)).astype("float32"), 0)
     proba = model.predict(arr, verbose=0)[0]
+    idx = int(np.argmax(proba)); conf = float(proba[idx]); label = class_names[idx]
 
-    ordre = np.argsort(proba)[::-1]
-    best = int(ordre[0]); conf = float(proba[best]); label = class_names[best]
-    autres = [(class_names[i], float(proba[i])) for i in ordre[1:3]]
+    st.subheader("Diagnostic (top 3)")
+    for i in np.argsort(proba)[-3:][::-1]:
+        st.write(f"- **{class_names[i]}** : {proba[i]:.0%}")
 
-    st.write("")
-    if conf >= SEUIL:
-        if "healthy" in label:
-            card("green", f"Plante saine — {espece(label)}",
-                 f"Aucun signe de maladie détecté sur cette feuille de {espece(label)} (confiance {conf:.0%}).")
-        else:
-            card("orange", joli(label),
-                 f"Maladie détectée (confiance {conf:.0%}). Isolez la plante, retirez les feuilles atteintes "
-                 f"et rapprochez-vous d'un conseiller phytosanitaire.")
-        st.markdown("**Cela ressemble aussi un peu à :**")
-        st.markdown("".join(f'<span class="chip">{joli(n)} · {p:.0%}</span>' for n, p in autres),
-                    unsafe_allow_html=True)
+    if conf < SEUIL:
+        st.warning(f"⚠️ Diagnostic incertain ({conf:.0%}). Reprenez une photo nette ou consultez un expert.")
+    elif "healthy" in label:
+        st.success(f"✅ {label} — plante saine, aucun traitement nécessaire.")
     else:
-        card("gray", "Diagnostic incertain",
-             f"Je ne suis pas assez sûr pour trancher (meilleure hypothèse {conf:.0%}). "
-             f"Reprenez une photo plus nette, feuille bien cadrée et éclairée.")
-        st.markdown("**Cela pourrait ressembler à :**")
-        cands = [(label, conf)] + autres
-        st.markdown("".join(f'<span class="chip">{joli(n)} · {p:.0%}</span>' for n, p in cands),
-                    unsafe_allow_html=True)
-        st.info("Astuce : approchez-vous de la feuille, sur fond clair, sans flou — le diagnostic sera plus fiable.")
+        st.error(f"🩺 {label} détecté. Isolez la plante, retirez les feuilles atteintes, consultez un conseiller phytosanitaire.")
